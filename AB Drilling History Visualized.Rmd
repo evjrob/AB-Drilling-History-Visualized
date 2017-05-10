@@ -102,8 +102,8 @@ ab <- get_map("Alberta", zoom = 5, maptype = "terrain")
 ```
 
 ```{r}
-# The duration of the gif in seconds
-gif_duration <- 3
+# The duration of the animation in seconds
+animation_duration <- 3
 
 frames_per_second <- 12
 
