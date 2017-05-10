@@ -1,0 +1,124 @@
+---
+title: "Alberta Drilling History Visualized"
+date: 2017-05-05
+output: html_notebook
+---
+
+```{r setup, include = FALSE}
+library(tidyverse)
+library(ggmap)
+# My aertidywells package can be installed using: install_github("evjrob/aertidywells")
+library(aertidywells)
+```
+
+We're going to plot all of the wells ever drilled in Alberta as an animated map. The [data comes from the Alberta Energy Regulator (AER)](https://www.aer.ca/data-and-publications/statistical-reports/st37) and requires the following supporting data files to re-create the full human friendly dataset:
+
+* [Business Asscociate Codes](https://www.aer.ca/data-and-publications/statistical-reports/st104)
+    * <http://www.aer.ca/data/codes/BusinessAssociate_Codes.xlsx>
+* [Field and Pool Codes](https://www.aer.ca/data-and-publications/statistical-reports/st103)
+    * <http://aer.ca/data/codes/FieldList.txt>
+    * <http://aer.ca/data/codes/FieldPoolList.txt>
+* [Oilsands Area and Deposit Codes](http://www.petrinex.ca/29.asp)
+    * <https://www.petrinex.gov.ab.ca/bbreports/PRAOilSandsAreaCodes.csv>
+    * <https://www.petrinex.gov.ab.ca/bbreports/PRAOilSandsAreaDepositCodes.csv>
+
+The above files should be stored in a data/ folder within the same directory as this project.
+
+The well list can then be reconstructed:
+```{r, results = 'hide'}
+wells <- aertidywells::create_well_tibble()
+```
+
+The AER does not provide any precise location information for wells within the freely available well list so it is necessary to find and alternative means of placing them spatially. Luckily all wells in Alberta are issued a Unique Well Identifer (UWI) which consists of three main components:
+  
+  XX/YY-YY-YYY-YYWY/ZZ
+  
+The **X** components identify in sequential order the wells drilled in a given surface location using the [Dominion Land Survey (DLS)](https://en.wikipedia.org/wiki/Dominion_Land_Survey) coordinate system, the **Y** components identify the location of the bottom of the well in DLS coordinates, and the **Z** components identify the the drilling event for the well indicated by the previous two components.
+
+The **Y** components are the interesting and useful parts for this project. The breakdown of the DLS location is *LSD***-***SEC***-***TWP***-***RNG***W***MER*, defined as follows:
+
+* LSD: Legal Subdivision
+* SEC: Section
+* TWP: Township
+* RNG: Range
+* MER: Meridian
+
+It is possible to use the **Y** components of the UWI to approximate the precide location of each well and convert these locations to latitude and longitude for plotting. A means of converting the DLS locations to an easier coordinate systems is required. Unfortunately the process of converting the grid based DLS coordinates to Latitude and Longitude can only be approximate because the Legal Subdivisions of the DLS location we are given typically measure 400m by 400m. 
+
+There are numerous tools to convert DLS locations to other coordinate systems, but most of them are proprietary systems that only allow one query at a time or charge money for bulk conversions. This is largely due to the hisotrically closed and proprietary licensing of the the Alberta Township System (ATS), Alberta's precise version of the DLS system. Luckily the ATS coordinate files are now freely available from the Geospatial data vendor [AltaLIS](http://www.altalis.com/products/property/ats.html). The **ATS V4.1 Coordinate files** should be obtained from AltaLIS and extracted to /data/AltaLIS.
+
+```{r, results = 'hide'}
+ats_col_widths <- readr::fwf_widths(c(1, 2,3,2,2,11,12,4,2,2,1,1,1), c("MERIDIAN", "RANGE", "TOWNSHIP", "SECTION", "QUARTER SECTION", "LATITUDE", "LONGITUDE", "YEAR COMPUTED", "MONTH COMPUTED", "DAY COMPUTED", "STATION CODE", "STATUS CODE", "HORIZONTAL CLASSIFICATION"))
+
+ats_col_types <- list(readr::col_character(), # MERIDIAN
+                      readr::col_character(), # RANGE
+                      readr::col_character(), # TOWNSHIP
+                      readr::col_character(), # SECTION
+                      readr::col_character(), # QUARTER SECTION
+                      readr::col_double(), # LATITUDE
+                      readr::col_double(), # LONGITUDE
+                      readr::col_integer(), # YEAR COMPUTED
+                      readr::col_integer(), # MONTH COMPUTED
+                      readr::col_integer(), # DAY COMPUTED
+                      readr::col_character(), # STATION CODE
+                      readr::col_character(), # STATUS CODE
+                      readr::col_character()  # HORIZONTAL CLASSIFICATION
+)
+
+ats_location_data <- read_fwf("data/AltaLIS/ATS_V4_1.SEQ", ats_col_widths, col_types = ats_col_types)
+```
+
+The above data provided by AltaLIS is not accurate to the level of a single LSD. The finest resolution directly provided are the corners of the quarter sections. The ATS_Coordinate_File_Information.doc describes the precise positioning of these quarter sections.
+For our purposes we don't need to be so accurate. If we plot our wells to the level of a section the wells will be placed accurately within 1.6km. That doesn't seem particularly good, but the inaccuracies should be essentially unnoticable at a provincial map scale.
+
+Latitudes and Longitudes can be obtained for each section by grouping the data by each component of the DLS location up to the section and summarizing the latitude and longitude to obtain the mean of all the rows given for each section. 
+
+```{r}
+ats_location_data <- ats_location_data %>% group_by(MERIDIAN, RANGE, TOWNSHIP, SECTION) %>% summarise(mean_latitude = mean(LATITUDE), mean_longitude = mean(LONGITUDE))
+
+ats_location_data <- ats_location_data %>% mutate(mean_longitude = -1 * mean_longitude)
+```
+
+The DLS location components of the UWI should also be extracted out into their own columns:
+
+```{r}
+wells <- wells %>% dplyr::mutate(`SECTION` = stringr::str_sub(`UWI-DISPLAY-FORMAT`, 7, 8))
+wells <- wells %>% dplyr::mutate(`TOWNSHIP` = stringr::str_sub(`UWI-DISPLAY-FORMAT`, 10, 12))
+wells <- wells %>% dplyr::mutate(`RANGE` = stringr::str_sub(`UWI-DISPLAY-FORMAT`, 14, 15))
+wells <- wells %>% dplyr::mutate(`MERIDIAN` = stringr::str_sub(`UWI-DISPLAY-FORMAT`, 17, 17))
+```
+
+Now the mean latitude and longitude can now be joined to the wells data set:
+
+```{r}
+wells <- wells %>% left_join(ats_location_data %>% select(MERIDIAN, RANGE, TOWNSHIP, SECTION, mean_latitude, mean_longitude))
+```
+
+The base map is sourced from Gogle maps using ggmap:
+
+```{r}
+ab <- get_map("Alberta", zoom = 5, maptype = "terrain")
+#ggmap(ab) + geom_point(data = wells %>% filter(`FINAL-DRILL-DATE`), aes(x = mean_longitude, y = mean_latitude, color = "red"))
+```
+
+```{r}
+# The duration of the gif in seconds
+gif_duration <- 3
+
+frames_per_second <- 12
+
+intervals <- gif_duration * frames_per_second
+
+```
+
+
+Investigate using list columns and nest() here. Otherwise just use map on the following:
+
+```{r}
+wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) > 2013)
+date_edges <- seq(min(wells_short$`FINAL-DRILL-DATE`, na.rm = T), max(wells_short$`FINAL-DRILL-DATE`, na.rm = T), length.out = intervals + 1)
+date_starts <- date_edges[1:36]
+date_ends <- date_edges[2:37]
+
+```
+
