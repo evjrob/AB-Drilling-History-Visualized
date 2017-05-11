@@ -101,24 +101,33 @@ ab <- get_map("Alberta", zoom = 5, maptype = "terrain")
 #ggmap(ab) + geom_point(data = wells %>% filter(`FINAL-DRILL-DATE`), aes(x = mean_longitude, y = mean_latitude, color = "red"))
 ```
 
+Running one frame per day will result in a huge number of frames and a very long animation even at a high frame rate ike 60fps:
+
 ```{r}
-# The duration of the animation in seconds
-animation_duration <- 3
+max(wells$`FINAL-DRILL-DATE`, na.rm = TRUE) - min(wells$`FINAL-DRILL-DATE`, na.rm = TRUE)
+#> Time difference of 49031 days
 
-frames_per_second <- 12
-
-intervals <- gif_duration * frames_per_second
-
+# days / frames per second / 60 seconds per minute
+49031 / 60 / 60
+#> 13.62
 ```
 
+An animated gif lasting more than 13 minutes is a bit excessive. Even as a proper video that is a very long time to spend watching dots dance around on a map. It's best to start with a smaller subset of the data to test that a shorter animation will turn out as intended. It is also a good idea to allow for the frames per second and the duration of the animation to be defined. Together with the data, these two variables will determine the period of dates encompased by each frame.
 
-Investigate using list columns and nest() here. Otherwise just use map on the following:
 
 ```{r}
 wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) > 2013)
-date_edges <- seq(min(wells_short$`FINAL-DRILL-DATE`, na.rm = T), max(wells_short$`FINAL-DRILL-DATE`, na.rm = T), length.out = intervals + 1)
-date_starts <- date_edges[1:36]
-date_ends <- date_edges[2:37]
 
+animation_duration <- 3
+frames_per_second <- 12
+frame_count <- animation_duration * frames_per_second
+
+# Period is the duration in days that each frame of the animation will span
+period <- (max(wells_short$`FINAL-DRILL-DATE`, na.rm = T) - min(wells_short$`FINAL-DRILL-DATE`, na.rm = T)) / frame_count
+
+start_date <- min(wells_short$`FINAL-DRILL-DATE`, na.rm = T)
+
+# Frame is the first frame of the animaion in which each well should be shown
+wells_short <- wells_short %>% mutate(frame = floor((`FINAL-DRILL-DATE` - start_date) / as.double(period, units = 'days')))
 ```
 
