@@ -116,11 +116,16 @@ An animated gif lasting more than 13 minutes is a bit excessive. Even as a prope
 
 
 ```{r}
-wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) > 2013)
+wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) > 2016)
 
+# The animation length in seconds
 animation_duration <- 3
 frames_per_second <- 12
 frame_count <- animation_duration * frames_per_second
+
+# The length of time in seconds it should take for a well to fade away
+fade_duration <- 0.5
+fade_frame_count <- fade_duration * frames_per_second
 
 # Period is the duration in days that each frame of the animation will span
 period <- (max(wells_short$`FINAL-DRILL-DATE`, na.rm = T) - min(wells_short$`FINAL-DRILL-DATE`, na.rm = T)) / frame_count
@@ -128,6 +133,18 @@ period <- (max(wells_short$`FINAL-DRILL-DATE`, na.rm = T) - min(wells_short$`FIN
 start_date <- min(wells_short$`FINAL-DRILL-DATE`, na.rm = T)
 
 # Frame is the first frame of the animaion in which each well should be shown
-wells_short <- wells_short %>% mutate(frame = floor((`FINAL-DRILL-DATE` - start_date) / as.double(period, units = 'days')))
+wells_short <- wells_short %>% mutate(FRAME = floor((`FINAL-DRILL-DATE` - start_date) / as.double(period, units = 'days')))
 ```
+
+A simple loop to create the frames for an image sequence:
+
+```{r}
+for (frame in 0:frame_count) {
+  frame_wells <- wells_short %>% filter((FRAME >= frame - fade_frame_count) & (FRAME <= frame)) %>% mutate(ALPHA = 1 - (frame - FRAME)/fade_frame_count)
+  png(filename=paste("image_sequence/", frame,".png"))
+  plot(ggmap(ab) + geom_point(data = frame_wells, aes(x = mean_longitude, y = mean_latitude, color = "red"), alpha = frame_wells$ALPHA) + theme(legend.position="none")) 
+  dev.off()
+}
+```
+
 
