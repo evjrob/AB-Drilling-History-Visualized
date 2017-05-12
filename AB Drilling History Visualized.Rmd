@@ -9,6 +9,8 @@ library(tidyverse)
 library(ggmap)
 # My aertidywells package can be installed using: install_github("evjrob/aertidywells")
 library(aertidywells)
+library(stringr)
+library(lubridate)
 ```
 
 We're going to plot all of the wells ever drilled in Alberta as an animated map. The [data comes from the Alberta Energy Regulator (AER)](https://www.aer.ca/data-and-publications/statistical-reports/st37) and requires the following supporting data files to re-create the full human friendly dataset:
@@ -98,8 +100,28 @@ The base map is sourced from Gogle maps using ggmap:
 
 ```{r}
 ab <- get_map("Alberta", zoom = 5, maptype = "terrain")
-#ggmap(ab) + geom_point(data = wells %>% filter(`FINAL-DRILL-DATE`), aes(x = mean_longitude, y = mean_latitude, color = "red"))
+
 ```
+
+And the wells should show up nicely on top of this base map:
+
+```{r}
+map_boundaries <- attr(ab, "bb")
+
+label_lon <- (map_boundaries$ur.lon + map_boundaries$ll.lon) / 2
+label_lat <- map_boundaries$ur.lat - (map_boundaries$ur.lat - map_boundaries$ll.lat) / 20
+
+label <- wells %>%
+  summarise(
+    lon = label_lon,
+    lat = label_lat,
+    label = "May 20, 1990"
+  )
+
+# Plotting a small subset of the wells since plotting all 592,966 of them will take a long time.
+ggmap(ab) + geom_point(data = (wells %>% filter(`FINAL-DRILL-DATE` == ymd("1990-05-20"))), aes(x = mean_longitude, y = mean_latitude, color = "red")) + theme(legend.position="none") + ggtitle("Wells Drilled in Alberta Over Time") + geom_text(aes(label = label), data = label, vjust = "top", hjust = "left") 
+```
+
 
 Running one frame per day will result in a huge number of frames and a very long animation even at a high frame rate ike 60fps:
 
@@ -112,14 +134,14 @@ max(wells$`FINAL-DRILL-DATE`, na.rm = TRUE) - min(wells$`FINAL-DRILL-DATE`, na.r
 #> 13.62
 ```
 
-An animated gif lasting more than 13 minutes is a bit excessive. Even as a proper video that is a very long time to spend watching dots dance around on a map. It's best to start with a smaller subset of the data to test that a shorter animation will turn out as intended. It is also a good idea to allow for the frames per second and the duration of the animation to be defined. Together with the data, these two variables will determine the period of dates encompased by each frame.
+An animated gif lasting more than 13 minutes is a bit excessive. Even as a video that is a very long time to spend watching dots dance around on a map. For this reason it's best to start with a smaller subset of the data to test that a shorter animation will turn out as intended. It is also a good idea to allow for the frames per second and the duration of the animation to be defined. Together with the data, these two variables will determine the period of dates encompased by each frame.
 
 
 ```{r}
-wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) > 2016)
+wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) > 2013)
 
 # The animation length in seconds
-animation_duration <- 3
+animation_duration <- 20
 frames_per_second <- 12
 frame_count <- animation_duration * frames_per_second
 
@@ -139,12 +161,25 @@ wells_short <- wells_short %>% mutate(FRAME = floor((`FINAL-DRILL-DATE` - start_
 A simple loop to create the frames for an image sequence:
 
 ```{r}
+# Padding the file names with zeros ensures the frames are assembled into the gif in the right order.
+filename_padding = floor(log10(frame_count)) + 1
+
 for (frame in 0:frame_count) {
+  label <- wells_short %>%
+  summarise(
+    lon = label_lon,
+    lat = label_lat,
+    label = str_c(month(start_date + frame * period, label = TRUE), " ", year(start_date + frame * period)) 
+  )
+  
   frame_wells <- wells_short %>% filter((FRAME >= frame - fade_frame_count) & (FRAME <= frame)) %>% mutate(ALPHA = 1 - (frame - FRAME)/fade_frame_count)
-  png(filename=paste("image_sequence/", frame,".png"))
-  plot(ggmap(ab) + geom_point(data = frame_wells, aes(x = mean_longitude, y = mean_latitude, color = "red"), alpha = frame_wells$ALPHA) + theme(legend.position="none")) 
+  png(filename=str_c("image_sequence/", str_pad(frame, width = filename_padding, side ="left", pad ="0"),".png"))
+  plot(ggmap(ab) + geom_point(data = frame_wells, aes(x = mean_longitude, y = mean_latitude, color = "red"), alpha = frame_wells$ALPHA) + theme(legend.position="none") + ggtitle("Wells Drilled in Alberta Over Time") + geom_text(aes(label = label), data = label, vjust = "top", hjust = "left"))
   dev.off()
 }
 ```
 
+```{r}
+system(str_c("convert -delay ",100/frames_per_second," image_sequence/*.png well_animation.gif"))
+```
 
