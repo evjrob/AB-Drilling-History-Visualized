@@ -105,6 +105,7 @@ And the wells should show up nicely on top of this base map:
 ```{r}
 map_boundaries <- attr(ab, "bb")
 
+# The upper and lower boundaries are used to place the date label in the map
 label_lon <- (map_boundaries$ur.lon + map_boundaries$ll.lon) / 2
 label_lat <- map_boundaries$ur.lat - (map_boundaries$ur.lat - map_boundaries$ll.lat) / 20
 
@@ -116,7 +117,13 @@ date_label <- wells %>%
   )
 
 # Plotting a small subset of the wells since plotting all 592,966 of them will take a long time.
-well_map <- ggmap(ab) + geom_point(data = (wells %>% filter(`FINAL-DRILL-DATE` == ymd("1990-05-20"))), aes(x = mean_longitude, y = mean_latitude, color = "red")) + theme(legend.position="none") + ggtitle("Wells Drilled in Alberta Over Time") + geom_text(aes(label = label), data = date_label, vjust = "top", hjust = "left") + labs(
+wells_May_20_1990 <- wells %>% filter(`FINAL-DRILL-DATE` == ymd("1990-05-20"))
+
+well_map <- ggmap(ab) + geom_point(data = wells_May_20_1990, aes(x = mean_longitude, y = mean_latitude, color = "red")) +
+  theme(legend.position="none") + 
+  ggtitle("Wells Drilled in Alberta Over Time") + 
+  geom_text(aes(label = label), data = date_label, vjust = "top", hjust = "left") + 
+  labs(
     x = "Longitude",
     y = "Latitude"
   )
@@ -128,7 +135,11 @@ It would also be nice to see where the drilling on this day falls in a historica
 ```{r}
 date_rect <- data.frame(xmin = ymd("1990-05-20"), xmax = ymd("1990-05-20"), ymin=-Inf, ymax=Inf)
 date_range_geom <- geom_rect(data = date_rect, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), color = "dodgerblue1", fill = "dodgerblue1", alpha = 0.4, inherit.aes = FALSE)
-well_chart <- ggplot(data = wells) + geom_density(aes(x = `FINAL-DRILL-DATE`), na.rm = TRUE) + theme(legend.position="none", axis.text.y = element_blank()) + ggtitle("") + labs(
+well_chart <- ggplot(data = wells) + 
+  geom_density(aes(x = `FINAL-DRILL-DATE`), na.rm = TRUE) + 
+  theme(legend.position="none", axis.text.y = element_blank()) + 
+  ggtitle("") + # The blank title ensures the top of the chart is flush with the map. 
+  labs(
     x = "Date Drilled",
     y = "Proportion of All Wells Drilled"
   )
@@ -142,7 +153,7 @@ And these two plots can be combined into one frame of the eventual animation:
 # This ratio of the plots was discovered to balance their heights and widths nicely through experimentation.
 lay <- rbind(c(1,1,1,2,2),
              c(1,1,1,2,2))
-grid.arrange(well_map, well_chart, layout_matrix = lay)
+grid.arrange(well_map, well_chart + date_range_geom, layout_matrix = lay)
 ```
 
 Running one frame per day will result in a huge number of frames and a very long animation even at a high frame rate ike 60fps:
@@ -154,7 +165,6 @@ frames / 60 / 60
 ``` 
 
 An animated gif lasting more than 13 minutes is a bit excessive. Even as a video that is a very long time to spend watching dots dance around on a map. For this reason it's best to start with a smaller subset of the data to test that a shorter animation will turn out as intended. It is also a good idea to allow for the frames per second and the duration of the animation to be defined. Together with the data, these two variables will determine the period of dates encompased by each frame.
-
 
 ```{r}
 wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) > 2013)
@@ -177,9 +187,12 @@ start_date <- min(wells_short$`FINAL-DRILL-DATE`, na.rm = T)
 wells_short <- wells_short %>% mutate(FRAME = floor((`FINAL-DRILL-DATE` - start_date) / as.double(period, units = 'days')))
 ```
 
-A simple loop to create the frames for an image sequence:
 
+A simple loop to create the frames for an image sequence:
 ```{r}
+# The basic well map and well chart will not vary beteen frames and should be create once outside the loop
+
+
 # Padding the file names with zeros ensures the frames are assembled into the gif in the right order.
 filename_padding = floor(log10(frame_count)) + 1
 
