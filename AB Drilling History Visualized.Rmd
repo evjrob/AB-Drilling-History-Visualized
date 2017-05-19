@@ -1,7 +1,9 @@
 ---
 title: "Alberta Drilling History Visualized"
-date: 2017-05-05
-output: html_notebook
+output:
+  html_notebook: default
+  html_document: default
+date: '2017-05-18'
 ---
 
 ```{r setup, include = FALSE}
@@ -49,7 +51,6 @@ The **Y** components are the interesting and useful parts for this project. The 
 It is possible to use the **Y** components of the UWI to approximate the precide location of each well and convert these locations to latitude and longitude for plotting. A means of converting the DLS locations to an easier coordinate systems is required. Unfortunately the process of converting the grid based DLS coordinates to Latitude and Longitude can only be approximate because the Legal Subdivisions of the DLS location we are given typically measure 400m by 400m. 
 
 There are numerous tools to convert DLS locations to other coordinate systems, but most of them are proprietary systems that only allow one query at a time or charge money for bulk conversions. This is largely due to the hisotrically closed and proprietary licensing of the the Alberta Township System (ATS), Alberta's precise version of the DLS system. Luckily the ATS coordinate files are now freely available from the Geospatial data vendor [AltaLIS](http://www.altalis.com/products/property/ats.html). The **ATS V4.1 Coordinate files** should be obtained from AltaLIS and extracted to /data/AltaLIS.
-
 ```{r, results = 'hide'}
 ats_col_widths <- readr::fwf_widths(c(1, 2,3,2,2,11,12,4,2,2,1,1,1), c("MERIDIAN", "RANGE", "TOWNSHIP", "SECTION", "QUARTER SECTION", "LATITUDE", "LONGITUDE", "YEAR COMPUTED", "MONTH COMPUTED", "DAY COMPUTED", "STATION CODE", "STATUS CODE", "HORIZONTAL CLASSIFICATION"))
 
@@ -75,7 +76,6 @@ The above data provided by AltaLIS is not accurate to the level of a single LSD.
 For our purposes we don't need to be so accurate. If we plot our wells to the level of a section the wells will be placed accurately within 1.6km. That doesn't seem particularly good, but the inaccuracies should be essentially unnoticable at a provincial map scale.
 
 Latitudes and Longitudes can be obtained for each section by grouping the data by each component of the DLS location up to the section and summarizing the latitude and longitude to obtain the mean of all the rows given for each section. 
-
 ```{r}
 ats_location_data <- ats_location_data %>% group_by(MERIDIAN, RANGE, TOWNSHIP, SECTION) %>% summarise(mean_latitude = mean(LATITUDE), mean_longitude = mean(LONGITUDE))
 
@@ -83,7 +83,6 @@ ats_location_data <- ats_location_data %>% mutate(mean_longitude = -1 * mean_lon
 ```
 
 The DLS location components of the UWI should also be extracted out into their own columns:
-
 ```{r}
 wells <- wells %>% dplyr::mutate(`SECTION` = stringr::str_sub(`UWI-DISPLAY-FORMAT`, 7, 8))
 wells <- wells %>% dplyr::mutate(`TOWNSHIP` = stringr::str_sub(`UWI-DISPLAY-FORMAT`, 10, 12))
@@ -92,20 +91,17 @@ wells <- wells %>% dplyr::mutate(`MERIDIAN` = stringr::str_sub(`UWI-DISPLAY-FORM
 ```
 
 Now the mean latitude and longitude can now be joined to the wells data set:
-
 ```{r}
 wells <- wells %>% left_join(ats_location_data %>% select(MERIDIAN, RANGE, TOWNSHIP, SECTION, mean_latitude, mean_longitude))
 ```
 
 The base map is sourced from Gogle maps using ggmap:
-
 ```{r}
 ab <- get_map("Alberta", zoom = 5, maptype = "terrain")
 
 ```
 
 And the wells should show up nicely on top of this base map:
-
 ```{r}
 map_boundaries <- attr(ab, "bb")
 
@@ -129,19 +125,19 @@ well_map
 ```
 
 It would also be nice to see where the drilling on this day falls in a historical context:
-
 ```{r}
 date_rect <- data.frame(xmin = ymd("1990-05-20"), xmax = ymd("1990-05-20"), ymin=-Inf, ymax=Inf)
-well_chart <- ggplot(data = wells) + geom_density(aes(x = `FINAL-DRILL-DATE`), na.rm = TRUE) + geom_rect(data = date_rect, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), color = "dodgerblue1", fill = "dodgerblue1", alpha = 0.4, inherit.aes = FALSE) + theme(legend.position="none", axis.text.y = element_blank()) + ggtitle("") + labs(
+date_range_geom <- geom_rect(data = date_rect, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), color = "dodgerblue1", fill = "dodgerblue1", alpha = 0.4, inherit.aes = FALSE)
+well_chart <- ggplot(data = wells) + geom_density(aes(x = `FINAL-DRILL-DATE`), na.rm = TRUE) + theme(legend.position="none", axis.text.y = element_blank()) + ggtitle("") + labs(
     x = "Date Drilled",
     y = "Proportion of All Wells Drilled"
   )
 
-well_chart
+
+well_chart + date_range_geom
 ```
 
 And these two plots can be combined into one frame of the eventual animation:
-
 ```{r}
 # This ratio of the plots was discovered to balance their heights and widths nicely through experimentation.
 lay <- rbind(c(1,1,1,2,2),
@@ -152,13 +148,10 @@ grid.arrange(well_map, well_chart, layout_matrix = lay)
 Running one frame per day will result in a huge number of frames and a very long animation even at a high frame rate ike 60fps:
 
 ```{r}
-max(wells$`FINAL-DRILL-DATE`, na.rm = TRUE) - min(wells$`FINAL-DRILL-DATE`, na.rm = TRUE)
-#> Time difference of 49031 days
-
 # days / frames per second / 60 seconds per minute
-49031 / 60 / 60
-#> 13.62
-```
+frames <- as.numeric(difftime(max(wells$`FINAL-DRILL-DATE`, na.rm = TRUE), min(wells$`FINAL-DRILL-DATE`, na.rm = TRUE), units = "days"))
+frames / 60 / 60
+``` 
 
 An animated gif lasting more than 13 minutes is a bit excessive. Even as a video that is a very long time to spend watching dots dance around on a map. For this reason it's best to start with a smaller subset of the data to test that a shorter animation will turn out as intended. It is also a good idea to allow for the frames per second and the duration of the animation to be defined. Together with the data, these two variables will determine the period of dates encompased by each frame.
 
