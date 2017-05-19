@@ -228,9 +228,6 @@ for (frame in 0:frame_count) {
   date_range_geom <- geom_rect(data = date_rect, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), color = "dodgerblue1", 
                                fill = "dodgerblue1", alpha = 0.4, inherit.aes = FALSE)
   
-  
-  #png(filename=str_c("image_sequence/", str_pad(frame, width = filename_padding, side ="left", pad ="0"),".png"))
-  
   frame_grob <- arrangeGrob(well_map + well_points + date_label, well_chart + date_range_geom, layout_matrix = layout_dims)
   
   ggsave(file = str_c("image_sequence/", str_pad(frame, width = filename_padding, side ="left", pad ="0"),".png"), plot = frame_grob)
