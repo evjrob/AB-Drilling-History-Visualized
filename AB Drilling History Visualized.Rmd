@@ -167,78 +167,80 @@ frames <- as.numeric(difftime(max(wells$`FINAL-DRILL-DATE`, na.rm = TRUE), min(w
 frames / 60 / 60
 ``` 
 
-An animated gif lasting more than 13 minutes is a bit excessive. Even as a video that is a very long time to spend watching dots dance around on a map. For this reason it's best to start with a smaller subset of the data to test that a shorter animation will turn out as intended. It is also a good idea to allow for the frames per second and the duration of the animation to be defined. Together with the data, these two variables will determine the period of dates encompased by each frame.
+An animated gif lasting more than 13 minutes is a bit excessive. Even as a video that is a very long time to spend watching dots dance around on a map. For this reason it's best to start with a smaller subset of the data to test that a shorter animation will turn out as intended.
 
 ```{r}
-wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) > 2013)
-
-# The animation length in seconds
-animation_duration <- 3
-frames_per_second <- 12
-frame_count <- animation_duration * frames_per_second
-
-# The length of time in seconds it should take for a well to fade away
-fade_duration <- 0.5
-fade_frame_count <- fade_duration * frames_per_second
-
-# Period is the duration in days that each frame of the animation will span
-period <- (max(wells_short$`FINAL-DRILL-DATE`, na.rm = T) - min(wells_short$`FINAL-DRILL-DATE`, na.rm = T)) / frame_count
-
-start_date <- min(wells_short$`FINAL-DRILL-DATE`, na.rm = T)
-
-# Frame is the first frame of the animaion in which each well should be shown
-wells_short <- wells_short %>% mutate(FRAME = floor((`FINAL-DRILL-DATE` - start_date) / as.double(period, units = 'days')))
+wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) >= 2011)
 ```
 
 
-A simple loop to create the frames for an image sequence:
+A simple loop can create the image sequence for the animation. The loop has been wrapped in a function to make the creation of multiple different animations straight forward:
 ```{r results='hide', message=FALSE, warning=FALSE}
-
-histogram_bins <- as.numeric(seq(from = start_date, to = start_date + (frame_count + 1) * period, by = period))
-
-# The chart can be created outside the loop and reused inside
-well_chart <- ggplot(data = wells_short) + 
-  geom_histogram(aes(x = `FINAL-DRILL-DATE`), na.rm = TRUE, breaks = histogram_bins) + 
-  theme(legend.position="none") + 
-  ggtitle("") + # The blank title ensures the top of the chart is flush with the map. 
-  labs(
-    x = "Date Drilled",
-    y = "Count of Wells Drilled"
-  )
-
-# Padding the file names with zeros ensures the frames are assembled into the gif in the right order.
-filename_padding = floor(log10(frame_count)) + 1
-
-for (frame in 0:frame_count) {
-  frame_start_date = start_date + frame * period
-  frame_end_date = start_date + (frame + 1) * period
+animate_well_points <- function(well_data, duration, frames_per_second = 12, fade_duration = 0.5) {
   
-  date_label_data <- wells_short %>%
-    summarise(
-      lon = label_lon,
-      lat = label_lat,
-      label = str_c(month(frame_start_date, label = TRUE), " ", year(frame_start_date)) 
+  frame_count <- duration * frames_per_second
+  fade_frame_count <- fade_duration * frames_per_second
+
+  # Period is the duration in days that each frame of the animation will span
+  period <- (max(well_data$`FINAL-DRILL-DATE`, na.rm = T) - min(well_data$`FINAL-DRILL-DATE`, na.rm = T)) / frame_count
+  start_date <- min(well_data$`FINAL-DRILL-DATE`, na.rm = T)
+
+  # Frame is the first frame of the animaion in which each well should be shown
+  well_data <- well_data %>% mutate(FRAME = floor((`FINAL-DRILL-DATE` - start_date) / as.double(period, units = 'days')))
+  
+  histogram_bins <- as.numeric(seq(from = start_date, to = start_date + (frame_count + 1) * period, by = period))
+  
+  # The chart can be created outside the loop and reused inside
+  well_chart <- ggplot(data = well_data) + 
+    geom_histogram(aes(x = `FINAL-DRILL-DATE`), na.rm = TRUE, breaks = histogram_bins) + 
+    theme(legend.position="none") + 
+    ggtitle("") + # The blank title ensures the top of the chart is flush with the map. 
+    labs(
+      x = "Date Drilled",
+      y = "Count of Wells Drilled"
     )
   
-  frame_wells <- wells_short %>% filter((FRAME >= frame - fade_frame_count) & (FRAME <= frame)) %>% 
-    mutate(ALPHA = 1 - (frame - FRAME)/fade_frame_count)
+  # Padding the file names with zeros ensures the frames are assembled into the gif in the right order.
+  filename_padding = floor(log10(frame_count)) + 1
   
-  well_points <- geom_point(data = frame_wells, aes(x = mean_longitude, y = mean_latitude, color = "red"), size = 0.25, alpha = frame_wells$ALPHA)
-  date_label <- geom_text(aes(label = label), data = date_label_data, vjust = "top", hjust = "left")
-  
-  date_rect <- data.frame(xmin = frame_start_date, xmax = frame_end_date, ymin=-Inf, ymax=Inf)
-  date_range_geom <- geom_rect(data = date_rect, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), 
-                               fill = "dodgerblue1", alpha = 0.4, inherit.aes = FALSE)
-  
-  frame_grob <- arrangeGrob(well_map + well_points + date_label, well_chart + date_range_geom, layout_matrix = layout_dims)
-  
-  ggsave(file = str_c("image_sequence/", str_pad(frame, width = filename_padding, side ="left", pad ="0"),".png"), plot = frame_grob)
-  
+  for (frame in 0:frame_count) {
+    frame_start_date = start_date + frame * period
+    frame_end_date = start_date + (frame + 1) * period
+    
+    date_label_data <- well_data %>%
+      summarise(
+        lon = label_lon,
+        lat = label_lat,
+        label = str_c(month(frame_start_date, label = TRUE), " ", year(frame_start_date)) 
+      )
+    
+    frame_wells <- well_data %>% filter((FRAME >= frame - fade_frame_count) & (FRAME <= frame)) %>% 
+      mutate(ALPHA = 1 - (frame - FRAME)/fade_frame_count)
+    
+    well_points <- geom_point(data = frame_wells, aes(x = mean_longitude, y = mean_latitude, color = "red"), 
+                              size = 0.25, alpha = frame_wells$ALPHA)
+    date_label <- geom_text(aes(label = label), data = date_label_data, vjust = "top", hjust = "left")
+    
+    date_rect <- data.frame(xmin = frame_start_date, xmax = frame_end_date, ymin=-Inf, ymax=Inf)
+    date_range_geom <- geom_rect(data = date_rect, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), 
+                                 fill = "dodgerblue1", alpha = 0.4, inherit.aes = FALSE)
+    
+    frame_grob <- arrangeGrob(well_map + well_points + date_label, well_chart + date_range_geom, layout_matrix = layout_dims)
+    
+    ggsave(file = str_c("image_sequence/well_points", str_pad(frame, width = filename_padding, side ="left", pad ="0"),".png"), plot = frame_grob)
+  }
 }
 ```
 
-And then once all the still frame images are created, ffmpeg can be called to turn them into a video file:
+The function can then be called on the wells_short data set and an animation of all drilling between 2011 and the present is created
 ```{r results='hide', message=FALSE, warning=FALSE}
-system(str_c("ffmpeg -y -framerate ", frames_per_second, " -i 'image_sequence/%02d.png' -s:v 1280x720 -c:v libx264 -profile:v high -crf 20 -pix_fmt yuv420p wells_animation.mp4"))
+animation_dur <- 6.4
+fps <- 12
+fade_dur <- 1/4
+
+animate_well_points(wells_short, duration = animation_dur, frames_per_second = fps, fade_duration = fade_dur)
+
+system(str_c("ffmpeg -y -framerate ", fps, " -i 'image_sequence/well_points%02d.png' -s:v 1280x720 -c:v libx264 -profile:v high -crf 20 -pix_fmt yuv420p wells_animation.mp4"))
 ```
+
 
