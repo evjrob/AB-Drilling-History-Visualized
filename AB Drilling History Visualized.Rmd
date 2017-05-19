@@ -227,20 +227,21 @@ animate_well_points <- function(well_data, duration, frames_per_second = 12, fad
     
     frame_grob <- arrangeGrob(well_map + well_points + date_label, well_chart + date_range_geom, layout_matrix = layout_dims)
     
-    ggsave(file = str_c("image_sequence/well_points", str_pad(frame, width = filename_padding, side ="left", pad ="0"),".png"), plot = frame_grob)
+    ggsave(file = str_c("image_sequence/well_points", str_pad(frame, width = filename_padding, side ="left", pad ="0"),".png"), 
+           plot = frame_grob)
   }
+  
+  system(str_c("ffmpeg -y -framerate ", frames_per_second, " -i 'image_sequence/well_points%02d.png' -s:v 1280x720 -c:v libx264 -profile:v high -crf 20 -pix_fmt yuv420p wells_animation.mp4"))
 }
 ```
 
-The function can then be called on the wells_short data set and an animation of all drilling between 2011 and the present is created
+The function can then be called on the wells_short data set and an animation of all drilling between 2011 and the present is created:
 ```{r results='hide', message=FALSE, warning=FALSE}
 animation_dur <- 6.4
 fps <- 12
 fade_dur <- 1/4
 
 animate_well_points(wells_short, duration = animation_dur, frames_per_second = fps, fade_duration = fade_dur)
-
-system(str_c("ffmpeg -y -framerate ", fps, " -i 'image_sequence/well_points%02d.png' -s:v 1280x720 -c:v libx264 -profile:v high -crf 20 -pix_fmt yuv420p wells_animation.mp4"))
 ```
-
+And the resulting video file can be seen in the project folder and below.
 
