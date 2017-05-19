@@ -16,7 +16,7 @@ library(stringr)
 library(lubridate)
 ```
 
-We're going to plot all of the wells ever drilled in Alberta as an animated map. The [data comes from the Alberta Energy Regulator (AER)](https://www.aer.ca/data-and-publications/statistical-reports/st37) and requires the following supporting data files to re-create the full human friendly dataset:
+We're going to plot wells that have been drilled in Alberta as an animated map. The [data comes from the Alberta Energy Regulator (AER)](https://www.aer.ca/data-and-publications/statistical-reports/st37) and requires the following supporting data files to re-create the full human friendly dataset:
 
 * [Business Asscociate Codes](https://www.aer.ca/data-and-publications/statistical-reports/st104)
     * <http://www.aer.ca/data/codes/BusinessAssociate_Codes.xlsx>
@@ -243,5 +243,5 @@ fade_dur <- 1/4
 
 animate_well_points(wells_short, duration = animation_dur, frames_per_second = fps, fade_duration = fade_dur)
 ```
-And the resulting video file can be seen in the project folder and below.
+And the resulting video file can be seen in the project folder and below:
 
