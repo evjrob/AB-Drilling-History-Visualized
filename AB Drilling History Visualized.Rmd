@@ -223,7 +223,7 @@ for (frame in 0:frame_count) {
   frame_wells <- wells_short %>% filter((FRAME >= frame - fade_frame_count) & (FRAME <= frame)) %>% 
     mutate(ALPHA = 1 - (frame - FRAME)/fade_frame_count)
   
-  well_points <- geom_point(data = frame_wells, aes(x = mean_longitude, y = mean_latitude, color = "red"), alpha = frame_wells$ALPHA)
+  well_points <- geom_point(data = frame_wells, aes(x = mean_longitude, y = mean_latitude, color = "red"), size = 0.25, alpha = frame_wells$ALPHA)
   date_label <- geom_text(aes(label = label), data = date_label_data, vjust = "top", hjust = "left")
   
   date_rect <- data.frame(xmin = frame_start_date, xmax = frame_end_date, ymin=-Inf, ymax=Inf)
