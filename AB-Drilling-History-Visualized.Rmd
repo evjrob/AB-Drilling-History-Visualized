@@ -3,7 +3,7 @@ title: "Alberta Drilling History Visualized"
 output:
   html_document: default
   html_notebook: default
-date: '2017-05-18'
+date: '2017-05-21'
 ---
 
 ```{r setup, include = FALSE}
@@ -51,7 +51,7 @@ The **Y** components are the interesting and useful parts for this project. The 
 It is possible to use the **Y** components of the UWI to approximate the precide location of each well and convert these locations to latitude and longitude for plotting. A means of converting the DLS locations to an easier coordinate systems is required. Unfortunately the process of converting the grid based DLS coordinates to Latitude and Longitude can only be approximate because the Legal Subdivisions of the DLS location we are given typically measure 400m by 400m. 
 
 There are numerous tools to convert DLS locations to other coordinate systems, but most of them are proprietary systems that only allow one query at a time or charge money for bulk conversions. This is largely due to the hisotrically closed and proprietary licensing of the the Alberta Township System (ATS), Alberta's precise version of the DLS system. Luckily the ATS coordinate files are now freely available from the Geospatial data vendor [AltaLIS](http://www.altalis.com/products/property/ats.html). The **ATS V4.1 Coordinate files** should be obtained from AltaLIS and extracted to /data/AltaLIS.
-```{r, results = 'hide'}
+```{r results = 'hide'}
 ats_col_widths <- readr::fwf_widths(c(1, 2,3,2,2,11,12,4,2,2,1,1,1), c("MERIDIAN", "RANGE", "TOWNSHIP", "SECTION", "QUARTER SECTION", "LATITUDE", "LONGITUDE", "YEAR COMPUTED", "MONTH COMPUTED", "DAY COMPUTED", "STATION CODE", "STATUS CODE", "HORIZONTAL CLASSIFICATION"))
 
 ats_col_types <- list(readr::col_character(), # MERIDIAN
@@ -98,7 +98,6 @@ wells <- wells %>% left_join(ats_location_data %>% select(MERIDIAN, RANGE, TOWNS
 The base map is sourced from Gogle maps using ggmap:
 ```{r}
 ab <- get_map("Alberta", zoom = 5, maptype = "terrain")
-
 ```
 
 And the wells should show up nicely on top of this base map:
@@ -175,7 +174,7 @@ wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) >= 2011)
 
 
 A simple loop can create the image sequence for the animation. The loop has been wrapped in a function to make the creation of multiple different animations possible:
-```{r results='hide', message=FALSE, warning=FALSE}
+```{r, results='hide', message=FALSE, warning=FALSE}
 animate_well_points <- function(well_data, duration, frames_per_second = 12, fade_duration = 0.5) {
   
   frame_count <- duration * frames_per_second
@@ -236,7 +235,7 @@ animate_well_points <- function(well_data, duration, frames_per_second = 12, fad
 ```
 
 The function can then be called on the wells_short data set and an animation of all drilling between 2011 and the present is created:
-```{r results='hide', message=FALSE, warning=FALSE}
+```{r, results='hide', message=FALSE, warning=FALSE}
 animation_dur <- 6.4
 fps <- 12
 fade_dur <- 1/4
