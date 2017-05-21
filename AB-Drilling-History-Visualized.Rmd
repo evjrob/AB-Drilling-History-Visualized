@@ -73,12 +73,14 @@ ats_location_data <- read_fwf("data/AltaLIS/ATS_V4_1.SEQ", ats_col_widths, col_t
 ```
 
 The above data provided by AltaLIS is not accurate to the level of a single LSD. The finest resolution directly provided are the corners of the quarter sections. The ATS_Coordinate_File_Information.doc describes the precise positioning of these quarter sections.
-For our purposes we don't need to be so accurate. If we plot our wells to the level of a section the wells will be placed accurately within 1.6km. That doesn't seem particularly good, but the inaccuracies should be essentially unnoticable at a provincial map scale.
+For our purposes we don't need to be so accurate. If we plot our wells to the level of a section the wells will be placed accurately within 1.6km. That doesn't seem particularly good, but the inaccuracies should be unnoticable at a provincial map scale.
 
-Latitudes and Longitudes can be obtained for each section by grouping the data by each component of the DLS location up to the section and summarizing the latitude and longitude to obtain the mean of all the rows given for each section. 
+A single latitude and Longitude can be obtained for each section by grouping the data by each component of the DLS location up to the section and finding the mean latitude and longitude of all the rows given for each section. 
 ```{r}
-ats_location_data <- ats_location_data %>% group_by(MERIDIAN, RANGE, TOWNSHIP, SECTION) %>% summarise(mean_latitude = mean(LATITUDE), mean_longitude = mean(LONGITUDE))
+ats_location_data <- ats_location_data %>% group_by(MERIDIAN, RANGE, TOWNSHIP, SECTION) %>% 
+  summarise(mean_latitude = mean(LATITUDE), mean_longitude = mean(LONGITUDE))
 
+# The AltaLIS longitudes are all positive values which puts them in Siberia, Mongolia, and China. Multiplying by -1 fixes this.
 ats_location_data <- ats_location_data %>% mutate(mean_longitude = -1 * mean_longitude)
 ```
 
@@ -95,7 +97,7 @@ Now the mean latitude and longitude can now be joined to the wells data set:
 wells <- wells %>% left_join(ats_location_data %>% select(MERIDIAN, RANGE, TOWNSHIP, SECTION, mean_latitude, mean_longitude))
 ```
 
-The base map is sourced from Gogle maps using ggmap:
+The base map is sourced from Google maps using ggmap:
 ```{r}
 ab <- get_map("Alberta", zoom = 5, maptype = "terrain")
 ```
@@ -136,12 +138,13 @@ well_map + well_points + date_label
 It would also be nice to see where the drilling on this day falls in a historical context:
 ```{r}
 date_rect <- data.frame(xmin = ymd("1990-05-20"), xmax = ymd("1990-05-20"), ymin=-Inf, ymax=Inf)
-date_range_geom <- geom_rect(data = date_rect, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), color = "dodgerblue1", fill = "dodgerblue1", alpha = 0.4, inherit.aes = FALSE)
+date_range_geom <- geom_rect(data = date_rect, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), 
+                             color = "dodgerblue1", fill = "dodgerblue1", alpha = 0.4, inherit.aes = FALSE)
 
 well_chart <- ggplot(data = wells) + 
   geom_histogram(aes(x = `FINAL-DRILL-DATE`), na.rm = TRUE, binwidth = 1) + 
   theme(legend.position="none") + 
-  ggtitle("") + # The blank title ensures the top of the chart is flush with the map. 
+  ggtitle(" ") + # The blank title ensures the top of the chart is flush with the map. 
   labs(
     x = "Date Drilled",
     y = "Count of Wells Drilled"
@@ -169,11 +172,11 @@ frames / 60 / 60
 An animated gif lasting more than 13 minutes is a bit excessive. Even as a video that is a very long time to spend watching dots dance around on a map. For this reason it's best to start with a smaller subset of the data to test that a shorter animation will turn out as intended.
 
 ```{r}
-wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) >= 2011)
+wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) >= 2010)
 ```
 
 
-A simple loop can create the image sequence for the animation. The loop has been wrapped in a function to make the creation of multiple different animations possible:
+A simple loop can create the image sequence for the animation. Note that this function uses a system call to ffmpeg to create an mp4 video file of the animation. FFMPEG will need to be installed on your computer to properly render the animation. The precise call to ffmpeg may also need to be adjusted depending on your operating system. The system call below is verified to work on Ubuntu 16.04.
 ```{r, results='hide', message=FALSE, warning=FALSE}
 animate_well_points <- function(well_data, duration, frames_per_second = 12, fade_duration = 0.5) {
   
@@ -193,7 +196,7 @@ animate_well_points <- function(well_data, duration, frames_per_second = 12, fad
   well_chart <- ggplot(data = well_data) + 
     geom_histogram(aes(x = `FINAL-DRILL-DATE`), na.rm = TRUE, breaks = histogram_bins) + 
     theme(legend.position="none") + 
-    ggtitle("") + # The blank title ensures the top of the chart is flush with the map. 
+    ggtitle(" ") + # The blank title ensures the top of the chart is flush with the map. 
     labs(
       x = "Date Drilled",
       y = "Count of Wells Drilled"
@@ -230,24 +233,25 @@ animate_well_points <- function(well_data, duration, frames_per_second = 12, fad
            plot = frame_grob)
   }
   
+  # This call to ffmpeg may need to be adjusted depending on your operating system.
   system(str_c("ffmpeg -y -framerate ", frames_per_second, " -i 'image_sequence/well_points%02d.png' -s:v 1280x720 -c:v libx264 -profile:v high -crf 20 -pix_fmt yuv420p wells_animation.mp4"))
 }
 ```
 
-The function can then be called on the wells_short data set and an animation of all drilling between 2011 and the present is created:
+The function can then be called on the wells_short data set and an animation of all drilling between 2010 and the present is created:
 ```{r, results='hide', message=FALSE, warning=FALSE}
-animation_dur <- 6.4
+animation_dur <- 7.4
 fps <- 12
 fade_dur <- 1/4
 
 animate_well_points(wells_short, duration = animation_dur, frames_per_second = fps, fade_duration = fade_dur)
 ```
 
-And the resulting video file can be seen below:
+And the resulting animation can be seen below:
 
 <video width="960" height="480" controls>
   <source src="wells_animation.mp4" type="video/mp4">
 Your browser does not support the video tag.
 </video> 
 
-The reduction in drilling since the latter half of 2014 due to the collapse in oil prices is clearly visible in the animation through both the histogram and the map itself. There is also a strong seasonal spike in drilling every winter. The seasonal spikes cause some challenges in comparing the true changes in the amount of drilling for different parts of the province as time goes on. I think an intersting next step will be to plot a heatmap style plot of the year over year change in drilling and animate it as well. These are also small animations that map only a tiny subset of Alberta's total drilling history. Another interesting next step will be to make this code work more efficiently and to run it on a more powerful machine that can plot the entire drilling history of the province from 1883 to present.
+The reduction in drilling since the latter half of 2014 due to the collapse in oil prices is clearly visible in the animation through both the histogram and the map itself. There is also a strong seasonal spike in drilling every winter. The seasonal spikes cause some challenges in comparing the true changes in the amount of drilling for different parts of the province as time goes on. I think an intersting next step will be to plot a heatmap style plot of the year over year change in drilling and animate it as well. This is also just a short animation that maps only a tiny subset of Alberta's total drilling history. Another interesting next step will be to make this code work more efficiently and to run it on a more powerful machine that can plot the entire drilling history of the province from 1883 to present.
