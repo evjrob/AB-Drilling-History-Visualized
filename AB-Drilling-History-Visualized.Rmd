@@ -3,7 +3,7 @@ title: "Alberta Drilling History Visualized"
 output:
   html_document: default
   html_notebook: default
-date: '2017-05-21'
+date: '2017-05-22'
 ---
 
 ```{r setup, include = FALSE}
@@ -15,6 +15,17 @@ library(aertidywells)
 library(stringr)
 library(lubridate)
 ```
+
+<video width="960" height="480" controls>
+  <source src="wells_animation.mp4" type="video/mp4">
+Your browser does not support the video tag.
+</video> 
+
+The reduction in drilling since the latter half of 2014 due to the collapse in oil prices is clearly visible in the animation through both the histogram and the map itself. There is also a strong seasonal spike in drilling every winter. The seasonal spikes cause some challenges in comparing the true changes in the amount of drilling for different parts of the province as time goes on. I think an interesting next step will be to plot a heat map style plot of the year over year change in drilling and animate it as well. This is also just a short animation that maps only a tiny subset of Alberta's total drilling history. Another interesting next step will be to make this code work more efficiently and to run it on a more powerful machine that can plot the entire drilling history of the province from 1883 to present.
+
+The data and R code necessary to create this animation are detailed below for those who are interested.
+
+### Creating The Animation
 
 We're going to plot wells that have been drilled in Alberta as an animated map. The [data comes from the Alberta Energy Regulator (AER)](https://www.aer.ca/data-and-publications/statistical-reports/st37) and requires the following supporting data files to re-create the full human friendly dataset:
 
@@ -177,7 +188,7 @@ wells_short <- wells %>% filter(lubridate::year(`FINAL-DRILL-DATE`) >= 2010)
 
 
 A simple loop can create the image sequence for the animation. Note that this function uses a system call to ffmpeg to create an mp4 video file of the animation. FFMPEG will need to be installed on your computer to properly render the animation. The precise call to ffmpeg may also need to be adjusted depending on your operating system. The system call below is verified to work on Ubuntu 16.04.
-```{r, results='hide', message=FALSE, warning=FALSE}
+```{r, message=FALSE, warning=FALSE}
 animate_well_points <- function(well_data, duration, frames_per_second = 12, fade_duration = 0.5) {
   
   frame_count <- duration * frames_per_second
@@ -239,7 +250,7 @@ animate_well_points <- function(well_data, duration, frames_per_second = 12, fad
 ```
 
 The function can then be called on the wells_short data set and an animation of all drilling between 2010 and the present is created:
-```{r, results='hide', message=FALSE, warning=FALSE}
+```{r, message=FALSE, warning=FALSE}
 animation_dur <- 7.4
 fps <- 12
 fade_dur <- 1/4
@@ -247,11 +258,3 @@ fade_dur <- 1/4
 animate_well_points(wells_short, duration = animation_dur, frames_per_second = fps, fade_duration = fade_dur)
 ```
 
-And the resulting animation can be seen below:
-
-<video width="960" height="480" controls>
-  <source src="wells_animation.mp4" type="video/mp4">
-Your browser does not support the video tag.
-</video> 
-
-The reduction in drilling since the latter half of 2014 due to the collapse in oil prices is clearly visible in the animation through both the histogram and the map itself. There is also a strong seasonal spike in drilling every winter. The seasonal spikes cause some challenges in comparing the true changes in the amount of drilling for different parts of the province as time goes on. I think an interesting next step will be to plot a heat map style plot of the year over year change in drilling and animate it as well. This is also just a short animation that maps only a tiny subset of Alberta's total drilling history. Another interesting next step will be to make this code work more efficiently and to run it on a more powerful machine that can plot the entire drilling history of the province from 1883 to present.
